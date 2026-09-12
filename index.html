@@ -174,6 +174,77 @@ h1,h2,h3{ font-weight:400; margin:0; letter-spacing:-.005em; }
 .nav-burger:hover i:nth-child(2){ width:26px; }
 .nav-burger:hover i:nth-child(1){ width:17px; }
 
+/* =============================================================== audio toggle */
+.audio-toggle{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:0 12px 0 10px; height:30px;
+  background:rgba(17,24,32,.5);
+  border:1px solid var(--line);
+  border-radius:15px;
+  color:var(--bone-dim);
+  user-select:none; -webkit-user-select:none;
+  cursor:pointer;
+  transition:border-color .3s var(--ease), background .3s var(--ease), color .3s var(--ease);
+  position:relative; z-index:2;
+  margin-left:clamp(14px,2vw,28px);
+  flex:0 0 auto;
+}
+.audio-toggle:hover{
+  border-color:rgba(223,231,224,.38);
+  background:rgba(223,231,224,.08);
+  color:var(--bone);
+}
+.audio-toggle:focus-visible{
+  outline:2px solid var(--cyan);
+  outline-offset:2px;
+}
+.audio-bars{
+  display:inline-flex; align-items:flex-end; gap:2.5px;
+  width:12px; height:12px; flex:0 0 auto;
+}
+.audio-bars i{
+  display:block; width:1.5px; height:100%;
+  background:var(--muted); border-radius:1px;
+  transform-origin:bottom; transform:scaleY(.2);
+  transition:transform .25s var(--ease), background .3s;
+}
+.audio-toggle.is-playing .audio-bars i{
+  background:var(--magenta);
+  animation:audioWave 1.2s ease-in-out infinite alternate;
+}
+.audio-toggle.is-playing .audio-bars i:nth-child(1){ animation-duration:.75s; animation-delay:.05s; }
+.audio-toggle.is-playing .audio-bars i:nth-child(2){ animation-duration:1.15s; animation-delay:.3s; }
+.audio-toggle.is-playing .audio-bars i:nth-child(3){ animation-duration:.9s; animation-delay:.15s; }
+.audio-toggle.is-playing .audio-bars i:nth-child(4){ animation-duration:1.25s; animation-delay:.4s; }
+
+@keyframes audioWave{
+  0%{ transform:scaleY(.25); }
+  40%{ transform:scaleY(.95); }
+  70%{ transform:scaleY(.4); }
+  100%{ transform:scaleY(1); }
+}
+
+.audio-label{
+  font-size:9.5px; font-weight:500; letter-spacing:.18em;
+  display:inline-flex; align-items:center; gap:5px;
+  line-height:1;
+}
+.audio-tag{
+  color:var(--muted);
+  transition:color .3s;
+}
+.audio-toggle:hover .audio-tag{
+  color:var(--bone-dim);
+}
+.audio-state{
+  font-weight:500;
+  color:var(--muted);
+  transition:color .3s;
+}
+.audio-toggle.is-playing .audio-state{
+  color:var(--cyan);
+}
+
 /* =============================================================== hero */
 .hero{ position:relative; min-height:100svh; padding:0 var(--pad); display:flex; flex-direction:column; }
 /* One scrim. The sanctuary is already near-black behind the reading, and
@@ -749,7 +820,8 @@ h1,h2,h3{ font-weight:400; margin:0; letter-spacing:-.005em; }
      transition, or it eases out over .55s with the sheet measured against the
      bar for that whole time. */
   .nav.menu-open{ transform:none; transition:none; }
-  .nav-burger{ margin-left:auto; }
+  .audio-toggle{ margin-left:auto; }
+  .nav-burger{ margin-left:14px; }
   .nav-burger.active i:nth-child(1){ top:7px; width:26px; transform:rotate(45deg); }
   .nav-burger.active i:nth-child(2){ top:7px; width:26px; transform:rotate(-45deg); }
   html.nav-open,html.nav-open body{ overflow:hidden; }
@@ -790,6 +862,8 @@ h1,h2,h3{ font-weight:400; margin:0; letter-spacing:-.005em; }
   .foot-base span:last-child{ text-align:left; }
 }
 @media (max-width:560px){
+  .audio-toggle{ padding:0 8px; gap:6px; }
+  .audio-tag{ display:none; }
   .chip{ flex-direction:column; gap:4px; }
   .chip .num{ font-size:clamp(22px,7.4vw,30px); }
   .chip .tx{ padding-top:0; }
@@ -820,6 +894,7 @@ h1,h2,h3{ font-weight:400; margin:0; letter-spacing:-.005em; }
   [data-rv]{ opacity:1 !important; transform:none !important; }
   .mask-line > span,.word{ opacity:1 !important; transform:none !important; }
   .glow, .glow::before, .portrait-scan i{ animation:none; }
+  .audio-toggle.is-playing .audio-bars i{ animation:none !important; transform:scaleY(.75) !important; }
 }
 </style>
 </head>
@@ -865,6 +940,12 @@ h1,h2,h3{ font-weight:400; margin:0; letter-spacing:-.005em; }
     <a class="nav-link" href="#services" data-cursor><span>Services</span><span class="alt">WHAT I DO</span></a>
     <a class="nav-link" href="#contact" data-cursor><span>Contact</span><span class="alt">SAY HELLO</span></a>
   </nav>
+  <button class="audio-toggle is-playing" id="audio-toggle" type="button" aria-label="Toggle background music" aria-pressed="true" data-cursor>
+    <span class="audio-bars" aria-hidden="true">
+      <i></i><i></i><i></i><i></i>
+    </span>
+    <span class="audio-label mono"><span class="audio-tag">SOUND</span> <span class="audio-state">ON</span></span>
+  </button>
   <button class="nav-burger" aria-label="Menu" data-cursor><i></i><i></i></button>
 </header>
 
@@ -4416,6 +4497,108 @@ function wireHeroExit() {
   apply();
 }
 
+/* =============================================================== audio */
+let BGM_STATE = {
+  audio: null,
+  enabled: true,
+  playing: false,
+  interacted: false,
+  videoPaused: false
+};
+
+function wireAudio() {
+  const btn = $('#audio-toggle');
+  if (!btn) return;
+  const statusEl = btn.querySelector('.audio-state');
+
+  const bgm = new Audio('assets/audio/bgm.mp3');
+  bgm.loop = true;
+  bgm.preload = 'auto';
+  bgm.volume = 0.55;
+  BGM_STATE.audio = bgm;
+
+  const updateUI = (playing) => {
+    BGM_STATE.playing = playing;
+    btn.classList.toggle('is-playing', playing);
+    btn.setAttribute('aria-pressed', String(playing));
+    if (statusEl) statusEl.textContent = playing ? 'ON' : 'OFF';
+  };
+
+  const tryPlay = () => {
+    if (!BGM_STATE.enabled || BGM_STATE.videoPaused) return;
+    const p = bgm.play();
+    if (p && p.then) {
+      p.then(() => {
+        updateUI(true);
+      }).catch(() => {
+        updateUI(false);
+      });
+    }
+  };
+
+  const pauseAudio = () => {
+    bgm.pause();
+    updateUI(false);
+  };
+
+  // Attempt initial playback immediately (default: ON)
+  tryPlay();
+
+  // If autoplay is blocked by browser policy without prior gesture,
+  // automatically start on user's first interaction
+  const onGesture = () => {
+    if (BGM_STATE.interacted) return;
+    BGM_STATE.interacted = true;
+    if (BGM_STATE.enabled && !BGM_STATE.playing && !BGM_STATE.videoPaused) {
+      tryPlay();
+    }
+    ['pointerdown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(evt => {
+      window.removeEventListener(evt, onGesture, true);
+    });
+  };
+
+  ['pointerdown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(evt => {
+    window.addEventListener(evt, onGesture, { capture: true, once: true });
+  });
+
+  // Toggle button click
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    BGM_STATE.interacted = true;
+    if (BGM_STATE.playing) {
+      BGM_STATE.enabled = false;
+      pauseAudio();
+    } else {
+      BGM_STATE.enabled = true;
+      tryPlay();
+    }
+  });
+
+  // Pause when tab is inactive, resume when active (if enabled by user)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (BGM_STATE.playing) bgm.pause();
+    } else {
+      if (BGM_STATE.enabled && !BGM_STATE.videoPaused) {
+        tryPlay();
+      }
+    }
+  });
+
+  window.__audioControl = {
+    pauseForVideo: () => {
+      BGM_STATE.videoPaused = true;
+      if (BGM_STATE.playing) bgm.pause();
+    },
+    resumeFromVideo: () => {
+      BGM_STATE.videoPaused = false;
+      if (BGM_STATE.enabled && !document.hidden) {
+        tryPlay();
+      }
+    }
+  };
+}
+
 /* =============================================================== 7 · nav */
 function wireNav() {
   let last = 0;
@@ -4719,6 +4902,8 @@ function openLB(id) {
   lbIndex = list.indexOf(id);
   if (lbIndex < 0) { lbIndex = 0; id = list[0]; }
   lastFocus = document.activeElement;
+  const w = WORK.find(x => x.id === id);
+  if (w && w.kind === 'video' && window.__audioControl) window.__audioControl.pauseForVideo();
   renderLB(id);
   lb.classList.add('open');
   document.body.classList.add('is-locked');
@@ -4729,6 +4914,7 @@ function openLB(id) {
 function closeLB() {
   lb.classList.remove('show');
   document.body.classList.remove('is-locked');
+  if (window.__audioControl) window.__audioControl.resumeFromVideo();
   setTimeout(() => {
     lb.classList.remove('open');
     lbMedia.innerHTML = '';            /* stops the audio with the element */
@@ -4739,6 +4925,11 @@ function closeLB() {
 function stepLB(d) {
   const list = lbList(); if (!list.length) return;
   lbIndex = (lbIndex + d + list.length) % list.length;
+  const w = WORK.find(x => x.id === list[lbIndex]);
+  if (window.__audioControl) {
+    if (w && w.kind === 'video') window.__audioControl.pauseForVideo();
+    else window.__audioControl.resumeFromVideo();
+  }
   renderLB(list[lbIndex]);
 }
 
@@ -4907,6 +5098,7 @@ const JOB_LABEL = {
 };
 
 function boot() {
+  wireAudio();
   document.body.classList.add('is-locked');
   let i = 0;
   const step = () => {
